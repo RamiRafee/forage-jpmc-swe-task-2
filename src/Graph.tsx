@@ -14,7 +14,7 @@ interface IProps {
  * Perspective library adds load to HTMLElement prototype.
  * This interface acts as a wrapper for Typescript compiler.
  */
-interface PerspectiveViewerElement {
+interface PerspectiveViewerElement extends HTMLElement{
   load: (table: Table) => void,
 }
 
@@ -46,23 +46,41 @@ class Graph extends Component<IProps, {}> {
     }
     if (this.table) {
       // Load the `table` in the `<perspective-viewer>` DOM reference.
+      elem.setAttribute('view','y_line');
+      elem.setAttribute('column-pivots','["stock"]');
+      elem.setAttribute('row-pivots','["timestamp"]');
+      elem.setAttribute('columns','["top_ask_price"]');
+      elem.setAttribute('aggregates',`{
+        "stock":"distinct count",
+        "top_ask_price":"avg",
+        "top_bid_price":"avg",
+        "timestamp":"distinct count"
+      }`);
 
       // Add more Perspective configurations here.
       elem.load(this.table);
     }
   }
 
-  componentDidUpdate() {
-    // Everytime the data props is updated, insert the data into Perspective table
-    if (this.table) {
-      // As part of the task, you need to fix the way we update the data props to
-      // avoid inserting duplicated entries into Perspective table again.
-      this.table.update(this.props.data.map((el: any) => {
+  componentDidUpdate(prevProps: any) {
+    // Every time the data props are updated, insert the data into Perspective table
+    if (this.table && this.props.data !== prevProps.data) {
+      // Filter out duplicate entries based on a unique key (e.g., timestamp)
+      const uniqueData = this.props.data.reduce((acc: any[], current: any) => {
+        const x = acc.find(item => item.timestamp === current.timestamp && item.stock === current.stock);
+        if (!x) {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+  
+      // Update the table with the filtered, unique data
+      this.table.update(uniqueData.map((el: any) => {
         // Format the data from ServerRespond to the schema
         return {
           stock: el.stock,
-          top_ask_price: el.top_ask && el.top_ask.price || 0,
-          top_bid_price: el.top_bid && el.top_bid.price || 0,
+          top_ask_price: (el.top_ask && el.top_ask.price) ? el.top_ask.price : 0,
+          top_bid_price: (el.top_bid && el.top_bid.price) ? el.top_bid.price : 0,
           timestamp: el.timestamp,
         };
       }));
